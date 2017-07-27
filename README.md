@@ -10,7 +10,8 @@ This line will:
 - It will install a single Master Cluster
 - Number of worker nodes can be anything
 
-The command is: ansible-playbook -s installKubernetes.yml 
+The command is:     ansible-playbook -s installKubernetes.yml 
+
 Setting up Ansible before running the command above (Everything is done under 'root' user):
 yum install epel-release (if this doesn't work use this: wget https://dl.fedoraproject.org/pub/epel/epel-release-latest-7.noarch.rpm   ;    rpm -i epel-release-latest-7.noarch.rpm ; yum update)
 
