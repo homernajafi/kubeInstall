@@ -1,0 +1,127 @@
+---
+# Ansible Script for Installing and configuring Docker and Kubernetes and Creating a Kubernetes Cluster
+# Auther: Homer Najafi
+# Date: 7/26/2017
+
+- hosts: k8scluster
+  tasks:
+   - name: Get the local IP
+     local_action: shell hostname -I | cut -f 1 -d' '
+     register: masterIP
+
+   - name: Check if there is any K8s installation
+     stat: path=/usr/local/bin/kubectl
+     register: kubectl_file
+
+   - name: Remove Old K8s installation if any
+     command: kubeadm reset
+     when: kubectl_file.stat.exists == True
+
+   - name: Remove Old Docker Installations
+     yum: pkg={{ item }} state=absent
+     with_items:
+       - docker
+       - docker-common
+       - docker-selinux
+       - docker-engine
+
+   - name: Install Docker Utils
+     yum: pkg={{item}} state=installed
+     with_items:
+       - yum-utils
+       - device-mapper-persistent-data
+       - lvm2
+
+   - name: Add repository
+     yum_repository:
+       name: dockerrepo
+       description: Docker CE Repo
+       baseurl: https://download.docker.com/linux/centos/docker-ce.repo
+
+   - name: Install Docker
+     yum: pkg=yum-utils state=installed
+     notify:
+       - Start Docker
+
+   - name: Get K8s version
+     uri:
+       url: https://storage.googleapis.com/kubernetes-release/release/stable.txt
+       return_content: yes
+     register: response
+
+   - name: Set the version
+     set_fact:
+       version: "{{ response.content | trim }}"
+
+   - name: Download KubeCtl
+     get_url:
+          url: https://storage.googleapis.com/kubernetes-release/release/{{ version }}/bin/linux/amd64/kubectl
+          dest: /usr/local/bin/kubectl
+          mode: 0555
+          force_basic_auth: yes
+
+   - name: Create K8s Repo file
+     copy:
+         content: "
+         [kubernetes] \n \
+         name=Kubernetes \n \
+         baseurl=https://packages.cloud.google.com/yum/repos/kubernetes-el7-x86_64 \n \
+         enabled=1 \n \
+         gpgcheck=1 \n \
+         repo_gpgcheck=1 \n \
+         gpgkey=https://packages.cloud.google.com/yum/doc/yum-key.gpg
+                 https://packages.cloud.google.com/yum/doc/rpm-package-key.gpg \n
+         "
+         dest: "./kubernetes.repo"
+         backup: no
+         owner: root
+         group: root
+         mode: 0644
+
+   - name: Disable Selinux
+     selinux:
+      state: disabled
+
+   - name: Install KubeAdm
+     yum: pkg=kubeadm state=installed
+
+   - name: Install KubeLet
+     yum: pkg=kubelet state=installed
+     notify:
+       - Start KubeLet
+
+   - name: Init Kubernetes on Master Node
+     command: kubeadm init
+     register: initVal
+     when: inventory_hostname == groups["k8scluster"][0]
+
+   - name: Copy Config file only for Master at this time
+     copy:
+      src: /etc/kubernetes/admin.conf
+      dest: ~/
+     when: inventory_hostname == groups["k8scluster"][0]
+
+   - name: Setup Environment Variables
+     lineinfile: dest=~/.bash_profile line='export KUBECONFIG=~/admin.conf' insertafter='EOF' state=present
+     when: inventory_hostname == groups["k8scluster"][0]
+
+   - name: Install Container Network Interface
+     local_action: shell export KUBECONFIG=~/admin.conf; kubectl apply -f "https://cloud.weave.works/k8s/net?k8s-version=$(kubectl version | base64 | tr -d '\n')"
+
+   - name: Get the Token
+     local_action: shell kubeadm token list | tail -1 | cut -f1 -d' '
+     register: token
+
+   - name: Fix bugs related to net bridge
+     shell: sysctl net.bridge.bridge-nf-call-iptables=1 ; sysctl net.bridge.bridge-nf-call-ip6tables=1
+   - shell: sed -i 's#Environment="KUBELET_CGROUP_ARGS=--cgroup-driver=systemd"#Environment="KUBELET_CGROUP_ARGS=--cgroup-driver=cgroupfs"#g' /etc/systemd/system/kubelet.service.d/10-kubeadm.conf
+
+   - name: Join Kubernetes
+     shell: kubeadm join --token {{ token.stdout }} {{ masterIP.stdout | trim }}:6443
+     when: inventory_hostname != groups["k8scluster"][0]
+
+  handlers:
+   - name: Start Docker
+     service: name=docker state=reloaded
+   - name: Start KubeLet
+     service: name=kubelet state=reloaded
