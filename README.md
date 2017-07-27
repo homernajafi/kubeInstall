@@ -1,6 +1,7 @@
 # kubeInstall
 Ansible Installation/Setup script to setup Kubernetes Cluster running only one command
 This is only tested on RedHat/CentOS. I will update it later for Ubuntu
+(somehow format of this readme gets messed up when I save it. You might want to copy/paste it somewhere to read it)
 
 This line will:
 - Cleanup any old, broken installation of Docker and Kubernetes
