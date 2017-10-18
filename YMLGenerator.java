@@ -50,6 +50,12 @@ class YMLGenerator {
 	@Parameter(names = "-cpu", description = "CPU")
 	private String cpu = "";
 
+	@Parameter(names = "-configmap", description = "Config Map file")
+	private String configmap = "";
+
+	@Parameter(names = "-secret", description = "Secret file")
+	private String secret = "";
+
 	@Parameter(names = { "-ExternalIP" }, description = "External IP")
 	private String externalIP = "";
 
@@ -58,6 +64,9 @@ class YMLGenerator {
 
 	@Parameter(names = { "-Type" }, description = "Type")
 	private String type = "";
+
+	@Parameter(names = { "-nv" }, description = "Name-Value Pair")
+	private List<String> nv = new ArrayList<>();
 
 	static final String INDENT = "  ";
 	static final String DBLINDENT = "    ";
@@ -107,7 +116,15 @@ class YMLGenerator {
 	static final String resourcesLimStr = "limits";
 	static final String resourcesMemStr = "memory";
 	static final String resourcesCpuStr = "cpu";
-
+	static final String namespaceStr = "namespace";
+	static final String namespaceDeltaStr = "delta";
+	static final String configMapEnvStr = "envFrom";
+	static final String configMapStr = "configMapRef";
+	static final String secretValueStr = "valueFrom";
+	static final String secretRefStr = "secretKeyRef";
+	static final String secretKeyStr = "key";
+	static final String secretDataStr = "data";
+	
 	public static void main(final String[] args) {
 		YMLGenerator yg = new YMLGenerator();
 
@@ -118,18 +135,18 @@ class YMLGenerator {
 	private static void writeYAML(YMLGenerator yg) {
 		if (yg.kind.equals("Deployment")) {
 			System.out.println(apiVersionLbl + ": " + "apps/v1beta1");
-		}
-		else if (yg.kind.equals("Service")) {
+		} else if (yg.kind.equals("Service") || yg.kind.equals("Secret")) {
 			System.out.println(apiVersionLbl + ": " + "v1");
 		}
 		System.out.println(kindStr + ": " + yg.kind);
 		// Meta Data
 		System.out.println(metadataStr + ": ");
+		System.out.println(INDENT + namespaceStr + ": " + namespaceDeltaStr);
 		System.out.println(INDENT + labelStr + ": ");
 		System.out.println(DBLINDENT + purposeStr + ": " + yg.label);
 		System.out.println(INDENT + nameStr + ": " + yg.label);
 		// Spec
-		System.out.println(specStr + ": ");
+		if (!yg.kind.equals("Secret"))System.out.println(specStr + ": ");
 
 		if (yg.kind.equals("Deployment")) {
 			System.out.println(INDENT + replicaStr + ": " + yg.replica);
@@ -146,6 +163,12 @@ class YMLGenerator {
 				System.out.println(QUININDENT + " - " + nameStr + ": " + envVar[0]);
 				System.out.println(SEXINDENT + envValStr + ": " + envVar[1]);
 			});
+			// Secret
+			/*
+			 * System.out.println(QUININDENT + " - " + nameStr + ": " + envVar[0]); env: -
+			 * name: SECRET_USERNAME valueFrom: secretKeyRef: name: mysecret key: username
+			 */
+
 			// Image
 			System.out.println(QUININDENT + imageStr + ": " + "\"" + yg.image + "\"");
 			System.out.println(QUININDENT + nameStr + ": " + yg.imageName);
@@ -154,6 +177,13 @@ class YMLGenerator {
 			}
 			// Working Dir
 			System.out.println(QUININDENT + workDirStr + ": " + yg.workDir);
+			// ConfigMap
+			/*
+			System.out.println(QUININDENT + configMapEnvStr + ": ");
+			System.out.println(SEXINDENT + "  " + " - " + configMapStr + ": ");
+			System.out.println(SEPTINDENT + "      " + nameStr + ": " + yg.configmap);
+			*/
+			// Resource Allocation
 			if (!yg.memory.equals("")) {
 				System.out.println(QUININDENT + resourcesStr + ": ");
 				System.out.println(SEXINDENT + resourcesReqStr + ": ");
@@ -189,7 +219,7 @@ class YMLGenerator {
 				System.out.println(DBLINDENT + "- " + portStr + ": " + yg.ports.get(i));
 			}
 			if (!yg.targetPorts.equals("")) {
-				System.out.println(DBLINDENT + targetPortStr + ": " + yg.targetPorts);
+				System.out.println(DBLINDENT + "  " + targetPortStr + ": " + yg.targetPorts);
 			}
 			// External IP
 			if (!yg.externalIP.equals("")) {
@@ -202,6 +232,21 @@ class YMLGenerator {
 			// Type
 			System.out.println(INDENT + typeStr + ": ");
 			System.out.println(DBLINDENT + yg.type);
+		} else if (yg.kind.equals("Secret")) {
+			// Secret Name-Value pairs
+			System.out.println(secretDataStr + ": ");
+			yg.nv.forEach(item -> {
+				String[] nvVar = item.split(":=");
+				System.out.println(INDENT + nvVar[0] + ": " + nvVar[1]);
+			});
 		}
 	}
 }
+
+/*
+ * 
+ * env: - name: SECRET_USERNAME valueFrom: secretKeyRef: name: mysecret key:
+ * username
+ * 
+ * 
+ */
